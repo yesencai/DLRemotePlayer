@@ -1,0 +1,11 @@
+use_frameworks!
+
+target 'DLRemotePlayer_Example' do
+  pod 'DLRemotePlayer', :path => '../'
+
+  target 'DLRemotePlayer_Tests' do
+    inherit! :search_paths
+
+    
+  end
+end
