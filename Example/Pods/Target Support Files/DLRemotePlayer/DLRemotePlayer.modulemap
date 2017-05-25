@@ -1,0 +1,6 @@
+framework module DLRemotePlayer {
+  umbrella header "DLRemotePlayer-umbrella.h"
+
+  export *
+  module * { export * }
+}

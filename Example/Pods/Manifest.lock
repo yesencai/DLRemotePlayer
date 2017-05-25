@@ -1,0 +1,16 @@
+PODS:
+  - DLRemotePlayer (0.1.0)
+
+DEPENDENCIES:
+  - DLRemotePlayer (from `../`)
+
+EXTERNAL SOURCES:
+  DLRemotePlayer:
+    :path: ../
+
+SPEC CHECKSUMS:
+  DLRemotePlayer: 570e31b326cdd3f47a9c142c8c0e42cee127b9c0
+
+PODFILE CHECKSUM: 9796ede97bc2428fc3e7a687690e34de6a19918b
+
+COCOAPODS: 1.2.1
