@@ -10,6 +10,7 @@
 #endif
 #endif
 
+#import "DLRemotePlayer.h"
 
 FOUNDATION_EXPORT double DLRemotePlayerVersionNumber;
 FOUNDATION_EXPORT const unsigned char DLRemotePlayerVersionString[];
