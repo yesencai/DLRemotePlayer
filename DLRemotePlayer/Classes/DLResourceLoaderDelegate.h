@@ -7,7 +7,8 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "AVFoundation/AVFoundation.h"
 
-@interface DLResourceLoaderDelegate : NSObject
+@interface DLResourceLoaderDelegate : NSObject<AVAssetResourceLoaderDelegate>
 
 @end

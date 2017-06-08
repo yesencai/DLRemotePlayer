@@ -10,4 +10,9 @@
 
 @implementation NSURL (DLExtension)
 
+- (NSURL *)steamingUrl{
+    NSURLComponents *components= [NSURLComponents componentsWithString:self.absoluteString];
+    components.scheme = @"steaming";
+    return components.URL;
+}
 @end

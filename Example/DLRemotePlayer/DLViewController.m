@@ -33,7 +33,7 @@
 
 //播放
 - (IBAction)play:(id)sender {
-    [[DLRemotePlayer shareInstance]playWithURL:[NSURL URLWithString:@"http://audio.xmcdn.com/group23/M04/63/C5/wKgJNFg2qdLCziiYAGQxcTOSBEw402.m4a"]];
+    [[DLRemotePlayer shareInstance]playWithURL:[NSURL URLWithString:@"http://audio.xmcdn.com/group23/M04/63/C5/wKgJNFg2qdLCziiYAGQxcTOSBEw402.m4a"]isCache:YES];
     [self.timer fire];
 
 }
@@ -102,6 +102,9 @@
 //    }
 //    [self.voice sendActionsForControlEvents:UIControlEventTouchUpInside];
     self.progress.progress = 0;
+    [DLRemotePlayer shareInstance].statusChanged = ^{
+
+    };
 }
 
 - (void)updateTime{

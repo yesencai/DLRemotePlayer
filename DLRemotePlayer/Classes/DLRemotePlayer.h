@@ -55,6 +55,8 @@ typedef NS_ENUM(NSInteger, DLRemotePlayerState) {
 @property (nonatomic, copy) NSString *totalTimeFomater;
 /** 播放状态 */
 @property (nonatomic, assign) DLRemotePlayerState status;
+/** 状态发生改变 */
+@property (nonatomic, copy) dispatch_block_t statusChanged;
 
 + (instancetype)shareInstance;
 
@@ -63,7 +65,7 @@ typedef NS_ENUM(NSInteger, DLRemotePlayerState) {
 
  @param url url
  */
-- (void)playWithURL:(NSURL *)url;
+- (void)playWithURL:(NSURL *)url isCache:(BOOL)cache;
 
 /**
  暂停

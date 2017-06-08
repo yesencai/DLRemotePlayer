@@ -7,8 +7,8 @@
 //
 
 #import "DLRemotePlayer.h"
-#import "AVFoundation/AVFoundation.h"
-
+#import "DLResourceLoaderDelegate.h"
+#import "NSURL+DLExtension.h"
 @interface DLRemotePlayer()
 {
     BOOL _isUserPause;
@@ -28,12 +28,15 @@
     return player;
 }
 
-- (void)playWithURL:(NSURL *)url{
-    
+- (void)playWithURL:(NSURL *)url isCache:(BOOL)cache{
+
     NSURL *currentUrl = [(AVURLAsset *)self.player.currentItem.asset URL];
     if ([currentUrl isEqual:url]) {
         [self resume];
         return;
+    }
+    if (cache) {
+        url = [url steamingUrl];
     }
     _url = url;
     _isUserPause = NO;
@@ -42,6 +45,9 @@
     if (self.player.currentItem) {
         [self removeObserver];
     }
+    DLResourceLoaderDelegate *loaderDelegate = [DLResourceLoaderDelegate new];
+    //关于音频的网络请求，通过这个代理拦截请求，自己处理音频文件下载
+    [asset.resourceLoader setDelegate:loaderDelegate queue:dispatch_get_global_queue(0, 0)];
     //2、资源的组织
     AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
     //当资源文件准备好之后，就通知可以播放器播放
@@ -60,6 +66,7 @@
 - (void)pause{
     [self.player pause];
     _isUserPause = YES;
+    self.status = DLRemotePlayerStatePause;
 }
 
 /**
@@ -80,7 +87,7 @@
     _isUserPause = YES;
     [self.player pause];
     [self removeObserver];
-    
+    self.status = DLRemotePlayerStateStopped;
     self.player = nil;
 }
 
@@ -218,13 +225,18 @@
     return  [NSString stringWithFormat:@"%02d:%02d",(int)self.totalSeconds / 60 , (int)self.totalSeconds % 60];
 }
 
+//告知外面状态发生改变
+- (void)setStatus:(DLRemotePlayerState)status{
+    _status = status;
+    self.statusChanged();
+}
+
 - (void)playInterupt{
     [self playEnd];
 }
 
 - (void)playEnd{
     [self stop];
-    self.status = DLRemotePlayerStateStopped;
 }
 
 /**

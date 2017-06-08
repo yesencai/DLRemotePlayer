@@ -10,4 +10,6 @@
 
 @interface NSURL (DLExtension)
 
+- (NSURL *)steamingUrl;
+
 @end
