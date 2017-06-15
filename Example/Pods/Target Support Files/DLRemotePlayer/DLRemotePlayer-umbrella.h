@@ -10,7 +10,11 @@
 #endif
 #endif
 
-#import "DLRemotePlayer.h"
+#import "NSURL+XMGAudio.h"
+#import "XMGAudioDownLoader.h"
+#import "XMGAudioFileTool.h"
+#import "XMGRemotePlayer.h"
+#import "XMGResourceLoader.h"
 
 FOUNDATION_EXPORT double DLRemotePlayerVersionNumber;
 FOUNDATION_EXPORT const unsigned char DLRemotePlayerVersionString[];

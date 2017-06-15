@@ -1,282 +1,348 @@
 //
 //  DLRemotePlayer.m
-//  Pods
+//  DLRemotePlayer
 //
-//  Created by Dylan on 2017/5/25.
-//
+//  Created by yesencai@163.com on 05/25/2017.
+//  Copyright (c) 2017 yesencai@163.com. All rights reserved.
 //
 
 #import "DLRemotePlayer.h"
-#import "DLResourceLoaderDelegate.h"
-#import "NSURL+DLExtension.h"
-@interface DLRemotePlayer()
+#import <AVFoundation/AVFoundation.h>
+#import "DLResourceLoader.h"
+#import "NSURL+DLAudio.h"
+
+@interface DLRemotePlayer ()
 {
     BOOL _isUserPause;
 }
-/** 播放器 */
 @property (nonatomic, strong) AVPlayer *player;
+
+@property (nonatomic, strong) DLResourceLoader *resourceLoader;
+
 @end
+
 
 @implementation DLRemotePlayer
 
-+ (instancetype)shareInstance{
-    static DLRemotePlayer *player = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        player = [[DLRemotePlayer alloc]init];
-    });
-    return player;
+static DLRemotePlayer *_shareInstance;
+
++ (instancetype)shareInstance {
+    if (!_shareInstance) {
+        _shareInstance = [[DLRemotePlayer alloc] init];
+    }
+    return _shareInstance;
 }
 
-- (void)playWithURL:(NSURL *)url isCache:(BOOL)cache{
++ (instancetype)allocWithZone:(struct _NSZone *)zone {
 
-    NSURL *currentUrl = [(AVURLAsset *)self.player.currentItem.asset URL];
-    if ([currentUrl isEqual:url]) {
-        [self resume];
-        return;
+    if (!_shareInstance) {
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+            _shareInstance = [super allocWithZone:zone];
+        });
+
     }
-    if (cache) {
-        url = [url steamingUrl];
+    return _shareInstance;
+}
+
+
+//- (DLResourceLoader *)resourceLoader {
+//    if (!_resourceLoader) {
+//        _resourceLoader = [[DLResourceLoader alloc] init];
+//    }
+//    return _resourceLoader;
+//}
+
+
+- (void)playWithURL: (NSURL *)url isCache:(BOOL)isCache {
+
+    
+    if ([self.url isEqual:url]) {
+        
+        if (self.state == DLRemotePlayerStatePlaying) {
+            return;
+        }
+        if (self.state == DLRemotePlayerStatePause) {
+            [self resume];
+            return;
+        }
+        if (self.state == DLRemotePlayerStateLoading) {
+            return;
+        }
+        
     }
-    _url = url;
-    _isUserPause = NO;
-    //1、资源的请求
-    AVURLAsset *asset = [AVURLAsset assetWithURL:url];
+    
+    
+    self.url = url;
+    // 其实, 系统已经帮我们封装了三个步骤
+    // [AVPlayer playerWithURL:url]
+    // 1. 资源的请求
+    // 2. 资源的组织 AVPlayerItem
+    // 3. 资源的播放
+    
     if (self.player.currentItem) {
-        [self removeObserver];
+        [self clearObserver:self.player.currentItem];
     }
-    DLResourceLoaderDelegate *loaderDelegate = [DLResourceLoaderDelegate new];
-    //关于音频的网络请求，通过这个代理拦截请求，自己处理音频文件下载
-    [asset.resourceLoader setDelegate:loaderDelegate queue:dispatch_get_global_queue(0, 0)];
-    //2、资源的组织
+
+    _isUserPause = NO;
+    NSURL *lastURL = url;
+    if (isCache) {
+        lastURL = [url streamingURL];
+    }
+    AVURLAsset *asset = [AVURLAsset assetWithURL:lastURL];
+    self.resourceLoader = [[DLResourceLoader alloc] init];
+    [asset.resourceLoader setDelegate:self.resourceLoader queue:dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)];
     AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
-    //当资源文件准备好之后，就通知可以播放器播放
-    //利用kvo监听status的变化，从而判断资源文件是否准备完成
+    
+    // 监听资源的组织者, 有没有组织好数据
     [item addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:nil];
     [item addObserver:self forKeyPath:@"playbackLikelyToKeepUp" options:NSKeyValueObservingOptionNew context:nil];
-    [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(playEnd) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
-    [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(playInterupt) name:AVPlayerItemPlaybackStalledNotification object:nil];
-    //3、资源的播放
+
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playEnd) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playIntrupt) name:AVPlayerItemPlaybackStalledNotification object:nil];
+    [self.player pause];
     self.player = [AVPlayer playerWithPlayerItem:item];
-}
-
-/**
- 暂停
- */
-- (void)pause{
-    [self.player pause];
-    _isUserPause = YES;
-    self.status = DLRemotePlayerStatePause;
-}
-
-/**
- 继续播放
- */
-- (void)resume{
-    _isUserPause = NO;
-    if (self.player&&self.player.currentItem.playbackLikelyToKeepUp) {
-        [self.player play];
-        self.status = DLRemotePlayerStatePlaying;
-    }
-}
-
-/**
- 停止播放
- */
-- (void)stop{
-    _isUserPause = YES;
-    [self.player pause];
-    [self removeObserver];
-    self.status = DLRemotePlayerStateStopped;
-    self.player = nil;
-}
-
-/**
- 快进播放
- 
- @param seekTime 快进时间
- */
-- (void)setSeekTime:(NSTimeInterval)seekTime{
-   
-    //转换成秒的总时长
-    NSTimeInterval totalSec = self.totalSeconds;
-    //转换成秒的当前播放时长
-    NSTimeInterval currentSec = self.currentSeconds;
-    currentSec += seekTime;
-    [self setSeekProgress:currentSec / totalSec];
-}
-
-/**
- 指定进度播放
- 
- @param seekProgress 进度大小
- */
-- (void)setSeekProgress:(float)seekProgress{
     
-    if (seekProgress <0 || seekProgress >1) {
-        return;
-    }
-    //1、计算出已经播放的时长 总时长 / progress（进度）
-    NSTimeInterval totalSeconds = self.totalSeconds;
-    NSTimeInterval currentSeconds = totalSeconds * seekProgress;
-    CMTime currentTime = CMTimeMake(currentSeconds, 1);
-    if (self.player.timeControlStatus != AVPlayerTimeControlStatusPlaying ) {
-        [self resume];
-    }
-    [self.player seekToTime:currentTime completionHandler:^(BOOL finished) {
-        if (finished) {
-            NSLog(@"确认加载时间点的资源");
-        }else{
-            NSLog(@"取消加载时间点的资源");
-        }
-    }];
+    
 }
 
-/**
- 设置倍速
- 
- @param rate 倍速大小
- */
-- (void)setRate:(float)rate{
+- (void)pause{ 
+    [self.player pause];
+    if (self.player) {
+        _isUserPause = YES;
+        self.state = DLRemotePlayerStatePause;
+    }
+}
+
+- (void)resume{
+    
+    [self.player play];
+    if (self.player && self.player.currentItem.playbackLikelyToKeepUp) {
+        _isUserPause = NO;
+        self.state = DLRemotePlayerStatePlaying;
+    }
+    
+}
+
+- (void)stop{ 
+    [self.player pause];
+    [self clearObserver:self.player.currentItem];
+    self.player = nil;
+    self.state = DLRemotePlayerStateStopped;
+}
+
+- (void)setRate:(float)rate {
     self.player.rate = rate;
 }
+- (float)rate {
+    return self.player.rate;
+}
 
-#pragma mark - get数据方法
-- (NSTimeInterval)totalSeconds{
-    //1、拿到音频文件总时长
-    CMTime totalTime = self.player.currentItem.duration;
-    //2、计算出已经播放的时长 总时长 / progress（进度）
-    NSTimeInterval totalSeconds = CMTimeGetSeconds(totalTime);
-    if (isnan(totalSeconds)) {
-        return 0;
+- (void)setVolume:(float)volume {
+    if (volume > 0) {
+        [self setMute:NO];
     }
-    return totalSeconds;
+    self.player.volume = volume;
 }
-
-- (NSTimeInterval)currentSeconds{
-    // 1、获取当前音频已经播放的时间长
-    CMTime currentTime = self.player.currentItem.currentTime;
-    //当前播放的秒数
-    NSTimeInterval currentSec = CMTimeGetSeconds(currentTime);
-    if (isnan(currentSec)) {
-        return 0;
-    }
-    return currentSec;
-}
-
-/**
- 播放进度
-
- @return 进度
- */
-- (float)progress{
-    if (self.totalSeconds==0) {
-        return 0;
-    }
-   return self.currentSeconds / self.totalSeconds;
-}
-
-/**
- 加载资源的进度
- @return 进度
- */
-- (float)loadDataProgress{
-    if (self.totalSeconds==0) {
-        return 0;
-    }
-    CMTimeRange timeRange =  [self.player.currentItem.loadedTimeRanges.lastObject CMTimeRangeValue];
-    CMTime loadTime = CMTimeAdd(timeRange.start, timeRange.duration);
-    NSTimeInterval loadSeconds = CMTimeGetSeconds(loadTime);
-    if (!isnan(loadSeconds)) {
-        return loadSeconds / self.totalSeconds;
-    }
-    return 0;
-}
-
-- (BOOL)muted{
-    return self.player.muted;
-}
-
-/**
- 设置是否静音
- @param muted 是否静音
- */
-
-- (void)setMuted:(BOOL)muted{
-    self.player.muted = muted;
-}
-
-- (float)volume{
+- (float)volume {
     return self.player.volume;
 }
 
-- (void)setVolume:(float)volume{
-    self.player.volume = volume;
-    if ([self.player isMuted]) {
-        self.player.muted = NO;
+- (void)setMute:(BOOL)mute {
+    self.player.muted = mute;
+}
+
+- (BOOL)mute {
+    return self.player.isMuted;
+}
+
+
+- (void)seekWithTime: (NSTimeInterval)time{
+    
+    // CMTime 影片时间
+    // 影片时间 -> 秒
+    // 秒 -> 影片时间
+    
+    // 1. 获取当前的时间点(秒)
+    double currentTime = self.currentTime + time;
+    double totalTime = self.duration;
+    
+    [self setProgress:currentTime / totalTime];
+    
+}
+
+- (double)duration {
+    double time = CMTimeGetSeconds(self.player.currentItem.duration);
+    if (isnan(time)) {
+        return 0;
     }
+    return time;
 }
 
-- (NSString *)currentTimeFomater{
-    return  [NSString stringWithFormat:@"%02d:%02d",(int)self.currentSeconds / 60 , (int)self.currentSeconds % 60];
+- (double)currentTime {
+    
+    double time = CMTimeGetSeconds(self.player.currentItem.currentTime);
+    
+    if (isnan(time)) {
+        return 0;
+    }
+    return time;
 }
 
-- (NSString *)totalTimeFomater{
-    return  [NSString stringWithFormat:@"%02d:%02d",(int)self.totalSeconds / 60 , (int)self.totalSeconds % 60];
+- (float)progress {
+    
+    if (self.duration == 0) {
+        return 0;
+    }
+    return self.currentTime / self.duration;
+    
 }
 
-//告知外面状态发生改变
-- (void)setStatus:(DLRemotePlayerState)status{
-    _status = status;
-    self.statusChanged();
+- (void)setProgress:(float)progress {
+    
+    // 0.0 - 1.0
+    // 1. 计算总时间 (秒) * progress
+    
+    double totalTime = self.duration;
+    double currentTimeSec = totalTime * progress;
+    CMTime playTime = CMTimeMakeWithSeconds(currentTimeSec, NSEC_PER_SEC);
+    [self.player seekToTime:playTime completionHandler:^(BOOL finished) {
+        
+        if (finished) {
+            NSLog(@"确认加载这个时间节点的数据");
+        }else {
+            NSLog(@"取消加载这个时间节点的播放数据");
+        }
+    }];
+    
+    
 }
 
-- (void)playInterupt{
-    [self playEnd];
+- (void)setState:(DLRemotePlayerState)state {
+//    if (_state == state) {
+//        return;
+//    }
+    _state = state;
+    if (self.stateChange) {
+        self.stateChange(state);
+    }
+    if (self.url) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:kRemotePlayerURLOrStateChangeNotification object:nil userInfo:@{
+                                                                                                                                   @"playURL": self.url,                                                                  @"playState": @(state)
+                                                                                                                                   }];
+    }
+
 }
 
-- (void)playEnd{
-    [self stop];
+- (void)setUrl:(NSURL *)url {
+    _url = url;
+
+    if (self.url) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:kRemotePlayerURLOrStateChangeNotification object:nil userInfo:@{
+                                                                                                                                   @"playURL": self.url,                                                                  @"playState": @(self.state)
+
+                                                                                                                                   }];
+    }
+
 }
 
-/**
- 删除监听
- */
-- (void)removeObserver{
-    [self.player.currentItem removeObserver:self forKeyPath:@"status" context:nil];
-    [self.player.currentItem removeObserver:self forKeyPath:@"playbackLikelyToKeepUp" context:nil];
-    [[NSNotificationCenter defaultCenter]removeObserver:self];
+
+-(float)loadProgress {
+    
+    CMTimeRange range = [self.player.currentItem.loadedTimeRanges.lastObject CMTimeRangeValue];
+    CMTime loadTime = CMTimeAdd(range.start, range.duration);
+    double loadTimeSec = CMTimeGetSeconds(loadTime);
+    
+    if (self.duration == 0) {
+        return 0;
+    }
+    
+    return loadTimeSec / self.duration;
+    
+    
 }
 
-/**
- 监听资源文件发生的变化
 
- @param keyPath 发生变化的属性文件
- @param object self
- @param change 发生变化后
- @param context 内容
- */
-- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey,id> *)change context:(void *)context{
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey,id> *)change context:(void *)context
+{
+    
     if ([keyPath isEqualToString:@"status"]) {
         AVPlayerItemStatus status = [change[NSKeyValueChangeNewKey] integerValue];
-        if (status==AVPlayerItemStatusReadyToPlay) {
-            [self resume];
-        }else{
-            self.status = DLRemotePlayerStateFailed;
-            NSLog(@"状态未知");
-        }
-    }else if ([keyPath isEqualToString:@"playbackLikelyToKeepUp"]) {
-        BOOL isOk = [change[NSKeyValueChangeNewKey] boolValue];
-        if (isOk) {
-            if (!_isUserPause) {
+        
+        switch (status) {
+            case AVPlayerItemStatusReadyToPlay:
+            {
+                NSLog(@"准备完毕, 开始播放");
                 [self resume];
-            }else{
-                
+                break;
             }
-        }else{
-            self.status = DLRemotePlayerStateLoading;
+            case AVPlayerItemStatusFailed:
+            {
+                NSLog(@"数据准备失败, 无法播放");
+                self.state = DLRemotePlayerStateFailed;
+                break;
+            }
+                
+            default:
+            {
+                NSLog(@"未知");
+                self.state = DLRemotePlayerStateUnknown;
+                break;
+            }
+        }
+        
+    }
+    
+    if ([keyPath isEqualToString:@"playbackLikelyToKeepUp"]) {
+        // 代表, 是否加载的可以进行播放了
+        BOOL playbackLikelyToKeepUp = [change[NSKeyValueChangeNewKey] boolValue];
+        if (playbackLikelyToKeepUp) {
+            NSLog(@"数据加载的足够播放了");
+            
+            // 能调用, 播放
+            // 手动暂停, 优先级 > 自动播放
+            if (!_isUserPause) {
+                self.state = DLRemotePlayerStatePlaying;
+                [self resume];
+            }
+   
+        }else {
+            NSLog(@"数据不够播放");
+            self.state = DLRemotePlayerStateLoading;
         }
     }
-
+    
+    
+    
 }
+
+- (void)playEnd {
+    self.state = DLRemotePlayerStateStopped;
+    if (self.playEndBlock) {
+        self.playEndBlock();
+    }
+    
+}
+
+- (void)playIntrupt {
+    NSLog(@"播放被打断");
+    self.state = DLRemotePlayerStatePause;
+}
+
+
+- (void)clearObserver: (AVPlayerItem *)item {
+    
+    [item removeObserver:self forKeyPath:@"status"];
+    [item removeObserver:self forKeyPath:@"playbackLikelyToKeepUp"];
+    
+}
+
+
+- (void)dealloc {
+    
+    [self clearObserver:self.player.currentItem];
+    
+}
+
+
 @end

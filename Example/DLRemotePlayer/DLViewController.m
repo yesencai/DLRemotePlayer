@@ -30,13 +30,15 @@
     }
     return _timer;
 }
-
+//@"http://audio.xmcdn.com/group23/M04/63/C5/wKgJNFg2qdLCziiYAGQxcTOSBEw402.m4a",
+//@"http://120.25.226.186:32812/resources/videos/minion_01.mp4"
 //播放
 - (IBAction)play:(id)sender {
-    [[DLRemotePlayer shareInstance]playWithURL:[NSURL URLWithString:@"http://audio.xmcdn.com/group23/M04/63/C5/wKgJNFg2qdLCziiYAGQxcTOSBEw402.m4a"]isCache:YES];
+    [[DLRemotePlayer shareInstance]playWithURL:[NSURL URLWithString:@"http://120.25.226.186:32812/resources/videos/minion_01.mp4"]isCache:YES];
     [self.timer fire];
 
 }
+
 - (IBAction)stop:(id)sender {
     [[DLRemotePlayer shareInstance] stop];
 }
@@ -54,14 +56,14 @@
 
 //快进
 - (IBAction)forwardRewind:(id)sender {
-    [[DLRemotePlayer shareInstance] setSeekTime:10];
+    [[DLRemotePlayer shareInstance] seekWithTime:10];
     [self updateTime];
 
 }
 //快进滑块控件
 - (void)forwardSlider:(UISlider *)sender {
     float value = [sender value];
-    [[DLRemotePlayer shareInstance]setSeekProgress:value];
+    [[DLRemotePlayer shareInstance]setProgress:value];
     [self updateTime];
 }
 
@@ -74,7 +76,7 @@
 - (IBAction)mute:(id)sender {
     UIButton *button = (UIButton *)sender;
     button.selected = !button.selected;
-    [[DLRemotePlayer shareInstance]setMuted:button.selected];
+    [[DLRemotePlayer shareInstance]setMute:button.selected];
 
 }
 
@@ -102,19 +104,19 @@
 //    }
 //    [self.voice sendActionsForControlEvents:UIControlEventTouchUpInside];
     self.progress.progress = 0;
-    [DLRemotePlayer shareInstance].statusChanged = ^{
-
+    [DLRemotePlayer shareInstance].stateChange = ^(DLRemotePlayerState state) {
+        
     };
 }
 
 - (void)updateTime{
 
-    self.starTimeLable.text = [[DLRemotePlayer shareInstance] currentTimeFomater];
+    self.starTimeLable.text = [NSString stringWithFormat:@"%02d:%02d",(int)[[DLRemotePlayer shareInstance] currentTime] / 60 , (int)[[DLRemotePlayer shareInstance] currentTime] % 60];
     
-    self.endTimeLable.text = [[DLRemotePlayer shareInstance] totalTimeFomater];
+    self.endTimeLable.text = [NSString stringWithFormat:@"%02d:%02d",(int)[[DLRemotePlayer shareInstance] duration] / 60 , (int)[[DLRemotePlayer shareInstance] duration] % 60];
     
     float playProgress = [[DLRemotePlayer shareInstance]progress];
-    float loadProgress = [[DLRemotePlayer shareInstance]loadDataProgress];
+    float loadProgress = [[DLRemotePlayer shareInstance]loadProgress];
     [self.into setValue:playProgress animated:YES];
     [self.progress setProgress:loadProgress animated:YES];
     NSLog(@"loadProgress%f",loadProgress);

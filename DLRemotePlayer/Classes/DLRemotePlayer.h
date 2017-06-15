@@ -1,12 +1,14 @@
 //
 //  DLRemotePlayer.h
-//  Pods
+//  DLRemotePlayer
 //
-//  Created by Dylan on 2017/5/25.
-//
+//  Created by yesencai@163.com on 05/25/2017.
+//  Copyright (c) 2017 yesencai@163.com. All rights reserved.
 //
 
 #import <Foundation/Foundation.h>
+
+#define kRemotePlayerURLOrStateChangeNotification @"remotePlayerURLOrStateChangeNotification"
 
 /**
  * 播放器的状态
@@ -29,58 +31,61 @@ typedef NS_ENUM(NSInteger, DLRemotePlayerState) {
 
 @interface DLRemotePlayer : NSObject
 
-/** 总时长 (秒)*/
-@property (nonatomic, assign,readonly) NSTimeInterval totalSeconds;
-/** 当前播放时长 (秒)*/
-@property (nonatomic, assign,readonly) NSTimeInterval currentSeconds;
-/** 当前播放url */
-@property (nonatomic, strong,readonly) NSURL *url;
-/** 当前播放进度 */
-@property (nonatomic, assign,readonly) float progress;
-/** 播放倍速 */
-@property (nonatomic, assign) float rate;
-/** 快进播放进度 */
-@property (nonatomic, assign) float seekProgress;
-/** 快进播放 */
-@property (nonatomic, assign) NSTimeInterval seekTime;
-/** 文件的加载进图 */
-@property (nonatomic, assign,readonly) float loadDataProgress;
-/** 是否静音 */
-@property (nonatomic, assign) BOOL muted;
-/** 设置声音大小 */
-@property (nonatomic, assign) float volume;
-/** 当前播放时间 */
-@property (nonatomic, copy) NSString *currentTimeFomater;
-/** 当前播放时间 */
-@property (nonatomic, copy) NSString *totalTimeFomater;
-/** 播放状态 */
-@property (nonatomic, assign) DLRemotePlayerState status;
-/** 状态发生改变 */
-@property (nonatomic, copy) dispatch_block_t statusChanged;
-
 + (instancetype)shareInstance;
 
-/**
- 播放
 
+/**
+ 根据URL地址进行播放音频
  @param url url
  */
-- (void)playWithURL:(NSURL *)url isCache:(BOOL)cache;
+- (void)playWithURL: (NSURL *)url isCache:(BOOL)isCache;
 
-/**
- 暂停
- */
+/** 暂停当前音频 */
 - (void)pause;
 
-/**
- 继续播放
- */
+/** 继续播放 */
 - (void)resume;
 
-/**
- 停止播放
- */
+/** 停止播放 */
 - (void)stop;
 
+/**
+ 快速播放到某个时间点
+ @param time 时间
+ */
+- (void)seekWithTime: (NSTimeInterval)time;
+
+/** 速率 */
+@property (nonatomic, assign) float rate;
+
+/** 声音 */
+@property (nonatomic, assign) float volume;
+
+/** 静音 */
+@property (nonatomic, assign) BOOL mute;
+
+/** 根据进度播放 */
+@property (nonatomic, assign) float progress;
+
+/** 音频总时长 */
+@property (nonatomic, assign, readonly) double duration;
+
+/** 音频当前播放时长 */
+@property (nonatomic, assign, readonly) double currentTime;
+
+/** 音频当前播放URL */
+@property (nonatomic, strong, readonly) NSURL *url;
+
+/** 音频当前加载进度 */
+@property (nonatomic, assign, readonly) float loadProgress;
+
+/** 音频当前播放状态 */
+@property (nonatomic, assign, readonly) DLRemotePlayerState state;
+
+/** 监听音频播放状态 */
+@property (nonatomic, copy) void(^stateChange)(DLRemotePlayerState state);
+
+/** 监听音频播放完成 */
+@property (nonatomic, copy) void(^playEndBlock)();
 
 @end
